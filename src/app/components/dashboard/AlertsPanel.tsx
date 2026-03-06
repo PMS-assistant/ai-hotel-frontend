@@ -5,9 +5,10 @@ import type { AlertData } from '../../lib/mockData';
 interface AlertsPanelProps {
   alerts: AlertData[];
   loading?: boolean;
+  onAcknowledge?: (id: string) => Promise<void>;
 }
 
-export function AlertsPanel({ alerts, loading = false }: AlertsPanelProps) {
+export function AlertsPanel({ alerts, loading = false, onAcknowledge }: AlertsPanelProps) {
   const criticalCount = alerts.filter((a) => a.severity === 'critical').length;
   const warningCount = alerts.filter((a) => a.severity === 'warning').length;
 
@@ -74,7 +75,7 @@ export function AlertsPanel({ alerts, loading = false }: AlertsPanelProps) {
             return order[a.severity] - order[b.severity];
           })
           .map((alert) => (
-            <AlertCard key={alert.id} alert={alert} />
+            <AlertCard key={alert.id} alert={alert} onAcknowledge={onAcknowledge} />
           ))}
       </div>
     </div>

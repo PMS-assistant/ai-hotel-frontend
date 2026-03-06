@@ -6,7 +6,7 @@ import { useDashboard } from '../hooks/useDashboard';
 import { useAutoRefresh } from '../hooks/useAutoRefresh';
 
 export default function AlertsPage() {
-  const { data, isLoading, error, lastRefresh, refetch } = useDashboard();
+  const { data, isLoading, error, lastRefresh, refetch, acknowledgeAlert } = useDashboard();
 
   useAutoRefresh(refetch, 5 * 60 * 1000);
 
@@ -23,7 +23,7 @@ export default function AlertsPage() {
         isRefreshing={isLoading}
       />
       <div className="px-6 py-6 max-w-3xl">
-        <AlertsPanel alerts={data?.alerts ?? []} loading={isLoading} />
+        <AlertsPanel alerts={data?.alerts ?? []} loading={isLoading} onAcknowledge={acknowledgeAlert} />
       </div>
     </div>
   );

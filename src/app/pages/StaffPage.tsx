@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
+import { toast } from 'sonner';
 import { TopBar } from '../components/layout/TopBar';
 import { Skeleton } from '../components/ui/skeleton';
-import { mockRoomStatus, mockArrivals, mockDepartures } from '../lib/mockData';
-import { Clock, ArrowDownToLine, ArrowUpFromLine, BedDouble } from 'lucide-react';
+import { useOperations } from '../hooks/useOperations';
+import { Clock, ArrowDownToLine, ArrowUpFromLine, BedDouble, ChevronDown } from 'lucide-react';
 
 type RoomStatus = 'occupied' | 'available' | 'checkout' | 'maintenance';
 
@@ -13,26 +14,93 @@ const statusConfig: Record<RoomStatus, { label: string; color: string; bg: strin
   maintenance: { label: 'Maint.', color: '#94a3b8', bg: 'rgba(148,163,184,0.1)' },
 };
 
+const STATUS_OPTIONS: RoomStatus[] = ['available', 'occupied', 'checkout', 'maintenance'];
+
+function RoomCard({
+  room,
+  onStatusChange,
+}: {
+  room: { room: string; status: RoomStatus; guestName?: string };
+  onStatusChange: (roomNumber: string, status: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const s = statusConfig[room.status];
+
+  return (
+    <div
+      className="rounded-xl p-3 border text-center relative cursor-pointer select-none"
+      style={{ backgroundColor: s.bg, borderColor: `${s.color}30` }}
+      onClick={() => setOpen((v) => !v)}
+    >
+      <p className="text-sm mb-0.5" style={{ color: s.color, fontWeight: 600 }}>
+        {room.room}
+      </p>
+      <div className="flex items-center justify-center gap-0.5">
+        <p className="text-xs" style={{ color: s.color, opacity: 0.7 }}>
+          {s.label}
+        </p>
+        <ChevronDown size={10} style={{ color: s.color, opacity: 0.5 }} />
+      </div>
+
+      {open && (
+        <div
+          className="absolute z-20 top-full left-1/2 -translate-x-1/2 mt-1 rounded-lg border py-1 min-w-[120px] shadow-xl"
+          style={{ backgroundColor: '#1e293b', borderColor: '#334155' }}
+        >
+          {STATUS_OPTIONS.map((opt) => {
+            const sc = statusConfig[opt];
+            return (
+              <button
+                key={opt}
+                className="w-full px-3 py-1.5 text-xs text-left hover:bg-slate-700 transition-colors"
+                style={{ color: sc.color }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setOpen(false);
+                  if (opt !== room.status) {
+                    onStatusChange(room.room, opt);
+                  }
+                }}
+              >
+                {sc.label}
+                {opt === room.status && ' ✓'}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function StaffPage() {
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading, error, refetch, updateRoomStatus } = useOperations();
 
   useEffect(() => {
-    const t = setTimeout(() => setIsLoading(false), 900);
-    return () => clearTimeout(t);
-  }, []);
+    if (error) toast.error(error);
+  }, [error]);
 
-  const rooms = mockRoomStatus;
-  const arrivals = mockArrivals;
-  const departures = mockDepartures;
+  const rooms = data?.rooms ?? [];
+  const arrivals = data?.arrivals ?? [];
+  const departures = data?.departures ?? [];
 
   const totalOccupied = rooms.filter((r) => r.status === 'occupied').length;
   const totalAvailable = rooms.filter((r) => r.status === 'available').length;
   const totalCheckout = rooms.filter((r) => r.status === 'checkout').length;
   const totalMaintenance = rooms.filter((r) => r.status === 'maintenance').length;
 
+  const handleStatusChange = async (roomNumber: string, status: string) => {
+    try {
+      await updateRoomStatus(roomNumber, status);
+      toast.success(`Room ${roomNumber} → ${statusConfig[status as RoomStatus]?.label ?? status}`);
+    } catch {
+      toast.error(`Failed to update room ${roomNumber}`);
+    }
+  };
+
   return (
     <div style={{ backgroundColor: '#0f172a', minHeight: '100vh' }}>
-      <TopBar title="Operations" />
+      <TopBar title="Operations" onRefresh={refetch} isRefreshing={isLoading} />
 
       <div className="px-6 py-6 space-y-8">
         {/* Status Summary */}
@@ -72,7 +140,7 @@ export default function StaffPage() {
         </section>
 
         {/* Congestion Alert */}
-        {!isLoading && (
+        {!isLoading && arrivals.length > 5 && (
           <div
             className="rounded-xl p-4 border-l-[3px] border"
             style={{
@@ -90,7 +158,7 @@ export default function StaffPage() {
               </p>
             </div>
             <p className="text-xs ml-5" style={{ color: '#94a3b8' }}>
-              23 arrivals confirmed in a 2-hour window. Consider pre-arrival messaging to stagger check-ins.
+              {arrivals.length} arrivals confirmed in a 2-hour window. Consider pre-arrival messaging to stagger check-ins.
             </p>
           </div>
         )}
@@ -197,29 +265,22 @@ export default function StaffPage() {
             <p className="text-sm" style={{ color: '#f1f5f9', fontWeight: 600 }}>
               Room Status
             </p>
+            <p className="text-xs" style={{ color: '#475569' }}>
+              Click a room to change status
+            </p>
           </div>
           <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-8 gap-2">
             {isLoading
               ? Array.from({ length: 15 }).map((_, i) => (
                   <Skeleton key={i} className="h-16 rounded-xl" style={{ backgroundColor: '#1e293b' }} />
                 ))
-              : rooms.map((room) => {
-                  const s = statusConfig[room.status];
-                  return (
-                    <div
-                      key={room.room}
-                      className="rounded-xl p-3 border text-center"
-                      style={{ backgroundColor: s.bg, borderColor: `${s.color}30` }}
-                    >
-                      <p className="text-sm mb-0.5" style={{ color: s.color, fontWeight: 600 }}>
-                        {room.room}
-                      </p>
-                      <p className="text-xs" style={{ color: s.color, opacity: 0.7 }}>
-                        {s.label}
-                      </p>
-                    </div>
-                  );
-                })}
+              : rooms.map((room) => (
+                  <RoomCard
+                    key={room.room}
+                    room={room as { room: string; status: RoomStatus; guestName?: string }}
+                    onStatusChange={handleStatusChange}
+                  />
+                ))}
           </div>
         </section>
       </div>

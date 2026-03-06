@@ -1,4 +1,5 @@
-import { AlertTriangle, Info, XCircle } from 'lucide-react';
+import { useState } from 'react';
+import { AlertTriangle, Info, XCircle, Check, Loader2 } from 'lucide-react';
 import { formatRelativeTime } from '../../lib/utils';
 import type { AlertData } from '../../lib/mockData';
 
@@ -34,10 +35,22 @@ const severityConfig = {
 
 interface AlertCardProps {
   alert: AlertData;
+  onAcknowledge?: (id: string) => Promise<void>;
 }
 
-export function AlertCard({ alert }: AlertCardProps) {
+export function AlertCard({ alert, onAcknowledge }: AlertCardProps) {
   const config = severityConfig[alert.severity];
+  const [dismissing, setDismissing] = useState(false);
+
+  const handleDismiss = async () => {
+    if (!onAcknowledge || dismissing) return;
+    setDismissing(true);
+    try {
+      await onAcknowledge(alert.id);
+    } finally {
+      setDismissing(false);
+    }
+  };
 
   return (
     <div
@@ -81,13 +94,24 @@ export function AlertCard({ alert }: AlertCardProps) {
           </span>
         </div>
       </div>
-      <div className="mt-2 ml-7">
+      <div className="mt-2 ml-7 flex items-center justify-between">
         <span
           className="text-xs px-1.5 py-0.5 rounded"
           style={{ backgroundColor: 'rgba(51,65,85,0.5)', color: '#64748b' }}
         >
           {alert.category}
         </span>
+        {onAcknowledge && (
+          <button
+            onClick={handleDismiss}
+            disabled={dismissing}
+            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs transition-colors hover:opacity-80 disabled:opacity-50"
+            style={{ backgroundColor: 'rgba(51,65,85,0.6)', color: '#94a3b8' }}
+          >
+            {dismissing ? <Loader2 size={11} className="animate-spin" /> : <Check size={11} />}
+            Dismiss
+          </button>
+        )}
       </div>
     </div>
   );

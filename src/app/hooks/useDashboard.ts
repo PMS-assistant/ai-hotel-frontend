@@ -15,6 +15,7 @@ interface UseDashboardReturn {
   error: string | null;
   lastRefresh: Date | null;
   refetch: () => void;
+  acknowledgeAlert: (id: string) => Promise<void>;
 }
 
 const hasApiBaseUrl = !!import.meta.env.VITE_API_BASE_URL;
@@ -56,9 +57,19 @@ export function useDashboard(): UseDashboardReturn {
     }
   }, []);
 
+  const acknowledgeAlert = useCallback(async (id: string) => {
+    if (hasApiBaseUrl) {
+      await apiClient.patch(`/dashboard/alerts/${id}/acknowledge`);
+    }
+    setData((prev) => {
+      if (!prev) return prev;
+      return { ...prev, alerts: prev.alerts.filter((a) => a.id !== id) };
+    });
+  }, []);
+
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  return { data, isLoading, error, lastRefresh, refetch: fetchData };
+  return { data, isLoading, error, lastRefresh, refetch: fetchData, acknowledgeAlert };
 }

@@ -16,7 +16,7 @@ import { formatCurrency, formatPercent } from '../lib/utils';
 export default function DashboardPage() {
   const { role, xeroConnected } = useUserStore();
   const navigate = useNavigate();
-  const { data, isLoading, error, lastRefresh, refetch } = useDashboard();
+  const { data, isLoading, error, lastRefresh, refetch, acknowledgeAlert } = useDashboard();
 
   useAutoRefresh(refetch, 5 * 60 * 1000);
 
@@ -111,7 +111,7 @@ export default function DashboardPage() {
 
         {/* Alerts */}
         <section>
-          <AlertsPanel alerts={data?.alerts ?? []} loading={isLoading} />
+          <AlertsPanel alerts={data?.alerts ?? []} loading={isLoading} onAcknowledge={acknowledgeAlert} />
         </section>
 
         {/* Charts */}
