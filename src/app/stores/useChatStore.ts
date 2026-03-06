@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { generateAIResponse } from '../lib/aiResponses';
+import { apiClient } from '../lib/axios';
 
 export interface Message {
   id: string;
@@ -84,10 +84,27 @@ export const useChatStore = create<ChatState>()(
           isTyping: true,
         }));
 
-        const delay = 1400 + Math.random() * 1000;
-        await new Promise((r) => setTimeout(r, delay));
+        let aiContent: string;
+        try {
+          const { data } = await apiClient.post<{
+            success: boolean;
+            decision?: { reply_to_user: string };
+            error?: string;
+            raw_response?: string;
+          }>('/chat', { message: content });
+          if (data.success && data.decision?.reply_to_user) {
+            aiContent = data.decision.reply_to_user;
+          } else {
+            aiContent = data.error ?? data.raw_response ?? 'Sorry, I couldn’t process that.';
+          }
+        } catch (err: unknown) {
+          const msg =
+            err && typeof err === 'object' && 'message' in err
+              ? String((err as { message: unknown }).message)
+              : 'Network error. Is the backend running?';
+          aiContent = `Something went wrong: ${msg}`;
+        }
 
-        const aiContent = generateAIResponse(content);
         const assistantMessage: Message = {
           id: `msg_${Date.now() + 1}`,
           role: 'assistant',
