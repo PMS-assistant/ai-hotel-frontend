@@ -5,20 +5,19 @@ import {
   Clock,
   RefreshCw,
   Shield,
-  Plug,
   BookOpen,
   Globe,
   Loader2,
-  AlertTriangle,
   ExternalLink,
   Unplug,
+  Plug,
   Wifi,
   WifiOff,
+  Building2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useUserStore, type DataHealth, type SyncHealth, type OtaChannel } from '../stores/useUserStore';
 import { apiClient } from '../lib/axios';
-import { CredentialModal } from '../components/connect/CredentialModal';
 import { TopBar } from '../components/layout/TopBar';
 import { formatDateTime } from '../lib/utils';
 
@@ -110,11 +109,12 @@ function MetaRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-// ─── PMS Section ──────────────────────────────────────────────────────────────
+// ─── Cloudbeds Section ──────────────────────────────────────────────────────
 
-function PmsSection() {
-  const { pmsConnected, pmsLastSyncTime, pmsDataHealth, role } = useUserStore();
-  const [modalOpen, setModalOpen] = useState(false);
+function CloudbedsSection() {
+  const { cloudbedsConnected, cloudbedsPropertyId, cloudbedsLastSyncTime, cloudbedsDataHealth, setCloudbedsConnected, disconnectCloudbeds, role, hotelId } = useUserStore();
+  const [connecting, setConnecting] = useState(false);
+  const [disconnecting, setDisconnecting] = useState(false);
 
   const healthLabel: Record<DataHealth, string> = {
     healthy: 'Data Healthy',
@@ -122,12 +122,54 @@ function PmsSection() {
     error:   'Data Error',
   };
 
+  const handleConnectCloudbeds = () => {
+    if (connecting) return;
+    setConnecting(true);
+
+    const clientId = import.meta.env.VITE_CLOUDBEDS_CLIENT_ID;
+    const redirectUri = import.meta.env.VITE_CLOUDBEDS_REDIRECT_URI ?? 'http://localhost:8000/auth/cloudbeds/callback';
+    const apiUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8000';
+
+    // Prefer backend endpoint if available (handles state/hotelId properly)
+    const backendStartUrl = `${apiUrl}/auth/cloudbeds/start?hotel_id=${hotelId}`;
+
+    if (clientId) {
+      // Build Cloudbeds OAuth URL
+      // Scopes: read reservations, rooms, dashboard data
+      const scope = 'read_reservations read_rooms read_dashboard';
+      const state = hotelId; // Pass hotel_id in state for callback association
+      const cloudbedsUrl = `https://hotels.cloudbeds.com/api/v1.1/oauth?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&response_type=code&state=${state}`;
+
+      // Redirect to Cloudbeds OAuth
+      window.location.href = cloudbedsUrl;
+    } else {
+      // Fallback: try backend endpoint
+      toast.error('Cloudbeds Client ID not configured. Please set VITE_CLOUDBEDS_CLIENT_ID in .env');
+      setConnecting(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    setDisconnecting(true);
+    try {
+      const hasApi = !!import.meta.env.VITE_API_BASE_URL;
+      if (hasApi) {
+        await apiClient.delete('/integrations/cloudbeds');
+      }
+      disconnectCloudbeds();
+      toast.success('Cloudbeds disconnected');
+    } catch {
+      toast.error('Failed to disconnect Cloudbeds');
+    }
+    setDisconnecting(false);
+  };
+
   return (
     <div>
       <SectionHeader
-        icon={<Plug size={16} />}
-        title="PMS — Guestline (Rezlynx)"
-        description="Primary property management system. Required for all dashboard data and AI insights."
+        icon={<Building2 size={16} />}
+        title="PMS — Cloudbeds"
+        description="Connect Cloudbeds to sync reservations, room inventory, and occupancy data for AI-powered insights."
       />
 
       <div
@@ -137,72 +179,85 @@ function PmsSection() {
         {/* Header row */}
         <div className="flex items-start justify-between mb-4">
           <StatusBadge
-            connected={pmsConnected}
-            health={pmsConnected ? pmsDataHealth : undefined}
-            label={pmsConnected ? healthLabel[pmsDataHealth] : undefined}
+            connected={cloudbedsConnected}
+            health={cloudbedsConnected ? cloudbedsDataHealth : undefined}
+            label={cloudbedsConnected ? healthLabel[cloudbedsDataHealth] : undefined}
           />
-          {pmsConnected && (
-            <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(124,58,237,0.15)', color: '#a78bfa' }}>
-              Rezlynx API v3
+          {cloudbedsConnected && cloudbedsPropertyId && (
+            <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: 'rgba(59,130,246,0.12)', color: '#60a5fa' }}>
+              Property {cloudbedsPropertyId}
             </span>
           )}
         </div>
 
         {/* Meta */}
-        {pmsConnected ? (
+        {cloudbedsConnected ? (
           <div className="space-y-2 mb-5">
+            {cloudbedsPropertyId && (
+              <MetaRow
+                icon={<Building2 size={12} />}
+                label="Property ID"
+                value={cloudbedsPropertyId}
+              />
+            )}
             <MetaRow
               icon={<Clock size={12} />}
               label="Last sync"
-              value={pmsLastSyncTime ? formatDateTime(pmsLastSyncTime) : 'Never'}
+              value={cloudbedsLastSyncTime ? formatDateTime(cloudbedsLastSyncTime) : 'Never'}
             />
             <MetaRow
               icon={<RefreshCw size={12} />}
-              label="Sync interval"
-              value="Every 5 minutes"
+              label="Sync scope"
+              value="Reservations, Rooms, Dashboard"
             />
           </div>
         ) : (
           <p className="text-xs mb-5" style={{ color: '#64748b' }}>
-            Connect your Guestline account to unlock occupancy, ADR, RevPAR and all AI-powered
-            operational insights.
+            Connect your Cloudbeds property to unlock real-time occupancy, reservations, and operational insights.
           </p>
         )}
 
         {/* Actions */}
         {role === 'owner' ? (
           <div className="flex items-center gap-2">
-            {pmsConnected ? (
-              <>
-                <button
-                  onClick={() => setModalOpen(true)}
-                  className="px-4 py-2 rounded-lg text-xs transition-colors hover:bg-slate-700"
-                  style={{ backgroundColor: '#334155', color: '#94a3b8', fontWeight: 500 }}
-                >
-                  Reconfigure
-                </button>
-              </>
+            {cloudbedsConnected ? (
+              <button
+                onClick={handleDisconnect}
+                disabled={disconnecting}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs transition-colors hover:bg-slate-700 disabled:opacity-60"
+                style={{ backgroundColor: '#334155', color: '#94a3b8', fontWeight: 500 }}
+              >
+                {disconnecting ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <Unplug size={11} />
+                )}
+                Disconnect Cloudbeds
+              </button>
             ) : (
               <button
-                onClick={() => setModalOpen(true)}
-                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs transition-all"
-                style={{ backgroundColor: '#7c3aed', color: '#fff', fontWeight: 500 }}
+                onClick={handleConnectCloudbeds}
+                disabled={connecting}
+                className="flex items-center gap-2 px-4 py-2 rounded-lg text-xs transition-all disabled:opacity-60"
+                style={{ backgroundColor: '#3b82f6', color: '#fff', fontWeight: 500 }}
               >
-                <Plug size={12} />
-                Connect Guestline
+                {connecting ? (
+                  <Loader2 size={11} className="animate-spin" />
+                ) : (
+                  <ExternalLink size={11} />
+                )}
+                Connect Cloudbeds
               </button>
             )}
           </div>
         ) : (
-          !pmsConnected && (
+          !cloudbedsConnected && (
             <p className="text-xs" style={{ color: '#475569' }}>
-              Integration setup requires Owner access.
+              Cloudbeds connection requires Owner access.
             </p>
           )
         )}
       </div>
-
-      <CredentialModal open={modalOpen} onClose={() => setModalOpen(false)} />
     </div>
   );
 }
@@ -536,52 +591,59 @@ function OtaSection() {
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
 export default function IntegrationsPage() {
-  const { pmsConnected, setXeroConnected, xeroConnected } = useUserStore();
+  const {
+    setXeroConnected,
+    xeroConnected,
+    setCloudbedsConnected,
+    cloudbedsConnected,
+  } = useUserStore();
 
+  // Check for OAuth callback and fetch integration status
   useEffect(() => {
     const hasApi = !!import.meta.env.VITE_API_BASE_URL;
+
+    // Handle Cloudbeds OAuth callback
+    const urlParams = new URLSearchParams(window.location.search);
+    const cloudbedsStatus = urlParams.get('cloudbeds');
+    if (cloudbedsStatus === 'connected') {
+      toast.success('Cloudbeds connected successfully');
+      // Clean up URL
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+
     if (!hasApi) return;
+
+    // Fetch integration statuses
     apiClient
-      .get<{ type: string; status: string; organisation_name?: string }[]>('/integrations')
+      .get<{ type: string; status: string; organisation_name?: string; property_id?: string }[]>('/integrations')
       .then(({ data }) => {
+        // Xero
         const xero = data.find((i) => i.type === 'xero' && i.status === 'connected');
         if (xero?.organisation_name) {
           setXeroConnected(xero.organisation_name);
         }
+        // Cloudbeds
+        const cloudbeds = data.find((i) => i.type === 'cloudbeds' && i.status === 'connected');
+        if (cloudbeds?.property_id && !cloudbedsConnected) {
+          setCloudbedsConnected(cloudbeds.property_id);
+        }
       })
       .catch(() => {});
-  }, [setXeroConnected]);
+  }, [setXeroConnected, setCloudbedsConnected, cloudbedsConnected]);
 
   return (
     <div style={{ backgroundColor: '#0f172a', minHeight: '100vh' }}>
       <TopBar title="Integrations" />
 
       <div className="px-6 py-8 max-w-4xl mx-auto space-y-10">
-        {/* PMS not connected warning banner */}
-        {!pmsConnected && (
-          <div
-            className="flex items-start gap-3 rounded-xl border px-4 py-3"
-            style={{
-              backgroundColor: 'rgba(239,68,68,0.07)',
-              borderColor: 'rgba(239,68,68,0.2)',
-            }}
-          >
-            <AlertTriangle size={15} className="shrink-0 mt-0.5" style={{ color: '#ef4444' }} />
-            <p className="text-xs" style={{ color: '#fca5a5' }}>
-              <span style={{ fontWeight: 600 }}>PMS connection required.</span> Connect Guestline
-              below to unlock the dashboard, AI intelligence, and all operational insights.
-            </p>
-          </div>
-        )}
-
-        {/* Section 1 — PMS */}
+        {/* Section 1 — Cloudbeds */}
         <section>
-          <PmsSection />
+          <CloudbedsSection />
         </section>
 
         <div style={{ borderColor: '#1e293b' }} className="border-t" />
 
-        {/* Section 2 — Xero */}
+        {/* Section 3 — Xero */}
         <section>
           <XeroSection />
         </section>

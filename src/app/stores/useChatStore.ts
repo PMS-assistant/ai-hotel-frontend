@@ -86,22 +86,17 @@ export const useChatStore = create<ChatState>()(
 
         let aiContent: string;
         try {
-          const { data } = await apiClient.post<{
-            success: boolean;
-            decision?: { reply_to_user: string };
-            error?: string;
-            raw_response?: string;
-          }>('/chat', { message: content });
-          if (data.success && data.decision?.reply_to_user) {
-            aiContent = data.decision.reply_to_user;
+          const response = await apiClient.post('/chat', { message: content });
+          const data = response.data;
+          const replyText = data.reply || data.decision?.reply_to_user;
+          if (data.success && replyText) {
+            aiContent = replyText;
           } else {
-            aiContent = data.error ?? data.raw_response ?? 'Sorry, I couldn’t process that.';
+            aiContent = data.error || data.raw_response || 'Sorry, could not process that.';
           }
-        } catch (err: unknown) {
-          const msg =
-            err && typeof err === 'object' && 'message' in err
-              ? String((err as { message: unknown }).message)
-              : 'Network error. Is the backend running?';
+        } catch (err: any) {
+          console.error('Chat error:', err);
+          const msg = err?.response?.data?.detail || err?.message || 'Network error. Is the backend running?';
           aiContent = `Something went wrong: ${msg}`;
         }
 
@@ -131,6 +126,6 @@ export const useChatStore = create<ChatState>()(
 
       clearAll: () => set({ conversations: [], activeConversationId: null }),
     }),
-    { name: 'meridian-chat-store' }
+    { name: 'vzir-chat-store-v1' }
   )
 );

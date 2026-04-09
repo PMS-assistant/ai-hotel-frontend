@@ -43,8 +43,10 @@ export function useDashboard(): UseDashboardReturn {
         });
       }
       setLastRefresh(new Date());
-    } catch {
-      setError('Failed to load dashboard data. Please try again.');
+    } catch (err: any) {
+      console.error('Dashboard error:', err);
+      const errorMsg = err?.response?.data?.detail || err?.message || 'Failed to load dashboard data. Please try again.';
+      setError(errorMsg);
       setData({
         kpis: mockKPIs,
         alerts: mockAlerts,
