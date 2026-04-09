@@ -12,6 +12,7 @@ export function ChatWindow() {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   const activeConversation = conversations.find((c) => c.id === activeConversationId);
+  const hasMessages = (activeConversation?.messages?.length ?? 0) > 0;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -21,14 +22,12 @@ export function ChatWindow() {
     await sendMessage(content, hotelId);
   };
 
-  const hasMessages = (activeConversation?.messages?.length ?? 0) > 0;
-
   return (
-    <div className="flex-1 flex flex-col min-h-0">
+    <div className="flex flex-col h-full min-h-0">
       {/* Messages area */}
-      <div className="flex-1 overflow-y-auto py-4">
+      <div className="flex-1 overflow-y-auto py-4 min-h-0">
         {!hasMessages ? (
-          <QuickPrompts onSelect={(p) => handleSend(p)} />
+          <QuickPrompts onSelect={handleSend} />
         ) : (
           <>
             {activeConversation!.messages.map((msg) => (

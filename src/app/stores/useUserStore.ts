@@ -24,6 +24,7 @@ const DEFAULT_OTA_CHANNELS: OtaChannel[] = [
 
 interface UserState {
   isAuthenticated: boolean;
+  onboardingCompleted: boolean;
   userId: string | null;
   email: string | null;
   role: Role;
@@ -35,6 +36,12 @@ interface UserState {
   pmsLastSyncTime: string | null;
   pmsDataHealth: DataHealth;
 
+  // PMS — Cloudbeds
+  cloudbedsConnected: boolean;
+  cloudbedsPropertyId: string | null;
+  cloudbedsLastSyncTime: string | null;
+  cloudbedsDataHealth: DataHealth;
+
   // Accounting — Xero
   xeroConnected: boolean;
   xeroOrganisationName: string | null;
@@ -44,12 +51,19 @@ interface UserState {
   // OTA Channels
   connectedOtas: OtaChannel[];
 
+  // Token
+  token: string | null;
+
   // Actions
   login: (email: string, role: Role) => void;
-  setAuthFromApi: (user: { id: string; email: string; role: Role; hotelId: string }) => void;
+  setAuthFromApi: (user: { id: string; email: string; role: Role; hotelId: string }, token: string) => void;
+  completeOnboarding: () => void;
   logout: () => void;
   setPmsConnected: (connected: boolean, syncTime?: string) => void;
   setPmsDataHealth: (health: DataHealth) => void;
+  setCloudbedsConnected: (propertyId: string) => void;
+  disconnectCloudbeds: () => void;
+  setCloudbedsDataHealth: (health: DataHealth) => void;
   setXeroConnected: (orgName: string) => void;
   disconnectXero: () => void;
   connectOta: (id: string) => void;
@@ -60,15 +74,22 @@ export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
       isAuthenticated: false,
+      onboardingCompleted: false,
       userId: null,
       email: null,
       role: 'owner',
       hotelName: 'The Grand Meridian',
       hotelId: 'hotel_001',
+      token: null,
 
       pmsConnected: true, // Demo: allow Dashboard/Chat without PMS. Set false when real PMS connected.
       pmsLastSyncTime: null,
       pmsDataHealth: 'healthy',
+
+      cloudbedsConnected: false,
+      cloudbedsPropertyId: null,
+      cloudbedsLastSyncTime: null,
+      cloudbedsDataHealth: 'healthy',
 
       xeroConnected: false,
       xeroOrganisationName: null,
@@ -85,20 +106,26 @@ export const useUserStore = create<UserState>()(
           role,
         }),
 
-      setAuthFromApi: (user) =>
+      setAuthFromApi: (user, token) =>
         set({
           isAuthenticated: true,
           userId: user.id,
           email: user.email,
           role: user.role,
           hotelId: user.hotelId,
+          token,
+          pmsConnected: true,
         }),
+
+      completeOnboarding: () => set({ onboardingCompleted: true }),
 
       logout: () =>
         set({
           isAuthenticated: false,
+          onboardingCompleted: false,
           userId: null,
           email: null,
+          token: null,
           pmsConnected: false,
           pmsLastSyncTime: null,
           xeroConnected: false,
@@ -114,6 +141,23 @@ export const useUserStore = create<UserState>()(
         }),
 
       setPmsDataHealth: (health) => set({ pmsDataHealth: health }),
+
+      setCloudbedsConnected: (propertyId) =>
+        set({
+          cloudbedsConnected: true,
+          cloudbedsPropertyId: propertyId,
+          cloudbedsLastSyncTime: new Date().toISOString(),
+          cloudbedsDataHealth: 'healthy',
+        }),
+
+      disconnectCloudbeds: () =>
+        set({
+          cloudbedsConnected: false,
+          cloudbedsPropertyId: null,
+          cloudbedsLastSyncTime: null,
+        }),
+
+      setCloudbedsDataHealth: (health) => set({ cloudbedsDataHealth: health }),
 
       setXeroConnected: (orgName) =>
         set({
@@ -153,6 +197,6 @@ export const useUserStore = create<UserState>()(
           ),
         })),
     }),
-    { name: 'meridian-user-store-v2' }
+    { name: 'vzir-user-store-v1' }
   )
 );
